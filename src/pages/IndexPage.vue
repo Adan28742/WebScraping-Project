@@ -1,1075 +1,552 @@
 <!-- src/pages/IndexPage.vue -->
 <template>
-  <div class="dashboard">
-    <!-- Navbar -->
-    <nav class="navbar">
-      <div class="logo">News Analysis Dashboard</div>
-      <div class="nav-links">
-        <span class="username">{{ nombreCompleto }}</span>
-        <button class="logout-btn" @click="logout">Cerrar Sesión</button>
-      </div>
-    </nav>
+  <div class="feed-container">
+    <div class="video-feed" ref="feedContainer" @scroll="handleScroll">
+      <div
+        v-for="(video, index) in videos"
+        :key="video.idVideoGenerado"
+        class="video-card"
+        :class="{ active: currentVideoIndex === index }"
+        :ref="
+          (el) => {
+            if (el) videoRefs[index] = el;
+          }
+        "
+      >
+        <div class="video-wrapper">
+          <iframe
+            :src="getEmbedUrl(video.linkVideo)"
+            frameborder="0"
+            allowfullscreen
+            class="video-player"
+            :class="{ visible: currentVideoIndex === index }"
+          ></iframe>
 
-    <!-- Content -->
-    <div class="dashboard-content">
-      <!-- Sección de Búsqueda -->
-      <div class="search-section">
-        <h3>Búsqueda de Noticias</h3>
-        <div class="search-card">
-          <div class="search-form">
-            <div class="form-group">
-              <label>Término de búsqueda</label>
-              <input
-                type="text"
-                v-model="searchConfig.query"
-                placeholder="Ej: noticias, news..."
-                :disabled="isProcessing"
-              />
+          <!-- Botones de interacción verticales -->
+          <div class="interaction-buttons-vertical">
+            <div class="interaction-button">
+              <q-btn
+                flat
+                round
+                :color="video.liked ? 'red' : 'white'"
+                icon="favorite"
+                @click.stop="toggleLike(video)"
+              >
+                <q-tooltip>Me gusta</q-tooltip>
+              </q-btn>
+              <span class="interaction-count">{{ video.likes || 0 }}</span>
             </div>
 
-            <div class="form-group">
-              <label>Cantidad de videos</label>
-              <input
-                type="number"
-                v-model="searchConfig.limit"
-                min="1"
-                max="20"
-                :disabled="isProcessing"
-              />
+            <div class="interaction-button">
+              <q-btn
+                flat
+                round
+                color="white"
+                icon="comment"
+                @click.stop="openComments(video)"
+              >
+                <q-tooltip>Comentarios</q-tooltip>
+              </q-btn>
+              <span class="interaction-count">{{
+                video.comments?.length || 0
+              }}</span>
             </div>
 
-            <div class="filters">
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  v-model="searchConfig.onlyLive"
-                  :disabled="isProcessing"
-                />
-                Solo transmisiones en vivo
-              </label>
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  v-model="searchConfig.recentOnly"
-                  :disabled="isProcessing"
-                />
-                Solo videos recientes
-              </label>
+            <div class="interaction-button">
+              <q-btn
+                flat
+                round
+                :color="video.saved ? 'primary' : 'white'"
+                icon="bookmark"
+                @click.stop="toggleSave(video)"
+              >
+                <q-tooltip>Guardar</q-tooltip>
+              </q-btn>
             </div>
 
-            <button
-              class="search-btn"
-              @click="startAnalysis"
-              :disabled="isProcessing"
-            >
-              {{ isProcessing ? "Procesando..." : "Iniciar Análisis" }}
-            </button>
+            <div class="interaction-button">
+              <q-btn
+                flat
+                round
+                color="white"
+                icon="share"
+                @click.stop="shareVideo(video)"
+              >
+                <q-tooltip>Compartir</q-tooltip>
+              </q-btn>
+            </div>
+          </div>
+
+          <!-- Información del video -->
+          <div class="video-info">
+            <div class="info-content">
+              <div class="video-title">Video {{ video.idVideoGenerado }}</div>
+              <div class="video-details">
+                <span class="category">Categoría {{ video.idCategoria }}</span>
+                <span class="duration">{{
+                  formatDuration(video.duracion)
+                }}</span>
+              </div>
+              <div class="date">{{ formatDate(video.fechaCreacion) }}</div>
+            </div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Progress Section -->
-      <div class="progress-section" v-if="isProcessing">
-        <div class="progress-card">
-          <h4>Estado del Proceso</h4>
-          <div class="progress-steps">
-            <div
-              class="step"
-              :class="{ active: currentStep >= 1, completed: currentStep > 1 }"
-            >
-              <div class="step-number">1</div>
-              <div class="step-label">Búsqueda de Videos</div>
-            </div>
-            <div
-              class="step"
-              :class="{ active: currentStep >= 2, completed: currentStep > 2 }"
-            >
-              <div class="step-number">2</div>
-              <div class="step-label">Descarga</div>
-            </div>
-            <div
-              class="step"
-              :class="{ active: currentStep >= 3, completed: currentStep > 3 }"
-            >
-              <div class="step-number">3</div>
-              <div class="step-label">Extracción de Frames</div>
-            </div>
-            <div
-              class="step"
-              :class="{ active: currentStep >= 4, completed: currentStep > 4 }"
-            >
-              <div class="step-number">4</div>
-              <div class="step-label">Análisis ML</div>
-            </div>
-            <div
-              class="step"
-              :class="{ active: currentStep >= 5, completed: currentStep > 5 }"
-            >
-              <div class="step-number">5</div>
-              <div class="step-label">Generación de Clips</div>
-            </div>
-          </div>
-          <div class="progress-details" v-if="currentProgress">
-            {{ currentProgress }}
-          </div>
-        </div>
-      </div>
+    <!-- Dialog de comentarios -->
+    <q-dialog v-model="showComments" position="right" maximized>
+      <q-card class="comments-dialog">
+        <q-card-section class="row items-center q-py-sm">
+          <div class="text-h6">Comentarios</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
 
-      <!-- Results Section -->
-      <div class="results-section" v-if="analysisResults.length > 0">
-        <h3>Resultados del Análisis</h3>
-        <div class="results-grid">
-          <div
-            v-for="(result, index) in analysisResults"
-            :key="index"
-            class="result-card"
+        <q-separator />
+
+        <q-card-section class="comments-list q-pa-none">
+          <q-scroll-area style="height: calc(100vh - 150px)">
+            <div class="q-pa-md">
+              <template v-if="currentVideo?.comments?.length">
+                <div
+                  v-for="comment in currentVideo.comments"
+                  :key="comment.id"
+                  class="comment q-mb-md"
+                >
+                  <div class="comment-header">
+                    <q-avatar size="32px">
+                      <img :src="comment.avatar" :alt="comment.username" />
+                    </q-avatar>
+                    <div class="comment-info">
+                      <div class="username">{{ comment.username }}</div>
+                      <div class="comment-date">
+                        {{ formatCommentDate(comment.date) }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="comment-content">{{ comment.text }}</div>
+                </div>
+              </template>
+              <div v-else class="text-center q-pa-md text-grey">
+                No hay comentarios aún. ¡Sé el primero en comentar!
+              </div>
+            </div>
+          </q-scroll-area>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section class="comment-input">
+          <q-input
+            v-model="newComment"
+            outlined
+            rounded
+            dense
+            placeholder="Escribe un comentario..."
+            bg-color="white"
+            @keyup.enter="addComment"
           >
-            <div class="result-header">
-              <span class="result-title">Cluster {{ index + 1 }}</span>
-              <span class="result-date">{{ result.timestamp }}</span>
-            </div>
-            <div class="result-content">
-              <div class="frames-preview">
-                <img
-                  :src="result.keyFrame"
-                  alt="Frame clave"
-                  class="key-frame"
-                />
-              </div>
-              <div class="result-actions">
-                <button class="download-btn" @click="downloadClip(result)">
-                  Descargar Clip
-                </button>
-                <button class="preview-btn" @click="previewClip(result)">
-                  Vista Previa
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+            <template v-slot:after>
+              <q-btn
+                round
+                dense
+                flat
+                color="primary"
+                icon="send"
+                @click="addComment"
+                :disable="!newComment.trim()"
+              />
+            </template>
+          </q-input>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
 
-    <!-- Preview Modal -->
-    <div class="modal" v-if="showPreview" @click="showPreview = false">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h4>Vista Previa del Clip</h4>
-          <button class="close-btn" @click="showPreview = false">
-            &times;
-          </button>
-        </div>
-        <div class="modal-body">
-          <video ref="previewVideo" controls>
-            <source :src="currentPreviewUrl" type="video/mp4" />
-            Tu navegador no soporta la reproducción de videos.
-          </video>
-        </div>
-      </div>
-    </div>
+    <!-- Dialog de compartir -->
+    <q-dialog v-model="showShare">
+      <q-card style="width: 300px">
+        <q-card-section class="row items-center">
+          <div class="text-h6">Compartir video</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <div class="share-options">
+            <q-btn
+              class="share-btn"
+              flat
+              color="primary"
+              icon="content_copy"
+              label="Copiar enlace"
+              @click="copyLink"
+            />
+            <q-btn
+              class="share-btn"
+              flat
+              color="blue"
+              icon="facebook"
+              label="Facebook"
+            />
+            <q-btn
+              class="share-btn"
+              flat
+              color="light-blue"
+              icon="twitter"
+              label="Twitter"
+            />
+            <q-btn
+              class="share-btn"
+              flat
+              color="green"
+              icon="whatsapp"
+              label="WhatsApp"
+            />
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
-import { useAuthStore } from "src/stores/auth";
-import { useRouter } from "vue-router";
+import { ref, onMounted, onUnmounted, computed } from "vue";
+import { useQuasar } from "quasar";
+import { useVideoStore } from "stores/video";
 
-const router = useRouter();
-const authStore = useAuthStore();
-const userProfile = authStore.getUserProfile();
+const $q = useQuasar();
+const videoStore = useVideoStore();
+const feedContainer = ref(null);
+const videoRefs = ref([]);
+const currentVideoIndex = ref(0);
+let scrollTimeout = null;
 
-// Computed
-const nombreCompleto = computed(() => {
-  return `${userProfile.nombres} ${userProfile.apellidos}`;
-});
+const videos = computed(() => videoStore.videos);
+const userProfile = computed(() => videoStore.userProfile);
 
-// Estado
-const searchConfig = ref({
-  query: "noticias",
-  limit: 5,
-  onlyLive: false,
-  recentOnly: true,
-});
+const showComments = ref(false);
+const showShare = ref(false);
+const currentVideo = ref(null);
+const newComment = ref("");
 
-const isProcessing = ref(false);
-const currentStep = ref(0);
-const currentProgress = ref("");
-const analysisResults = ref([]);
-const showPreview = ref(false);
-const currentPreviewUrl = ref("");
-
-// Funciones
-const logout = () => {
-  authStore.logout();
-  router.push("/login");
+const getEmbedUrl = (url) => {
+  const fileId = url.match(/\/d\/(.*?)\/view/)?.[1];
+  return `https://drive.google.com/file/d/${fileId}/preview`;
 };
 
-const startAnalysis = async () => {
-  isProcessing.value = true;
-  currentStep.value = 1;
-  analysisResults.value = [];
+const formatDate = (dateString) => {
+  return new Date(dateString).toLocaleDateString();
+};
 
+const formatDuration = (seconds) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+};
+
+const formatCommentDate = (date) => {
+  return new Date(date).toLocaleDateString("es-ES", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const handleScroll = () => {
+  if (scrollTimeout) clearTimeout(scrollTimeout);
+
+  scrollTimeout = setTimeout(() => {
+    if (!feedContainer.value) return;
+
+    const containerHeight = feedContainer.value.clientHeight;
+    const scrollPosition = feedContainer.value.scrollTop;
+    const newIndex = Math.round(scrollPosition / containerHeight);
+
+    if (newIndex !== currentVideoIndex.value) {
+      currentVideoIndex.value = newIndex;
+      snapToVideo(newIndex);
+    }
+  }, 50);
+};
+
+const snapToVideo = (index) => {
+  if (!feedContainer.value || !videoRefs.value[index]) return;
+
+  const containerHeight = feedContainer.value.clientHeight;
+  const targetPosition = containerHeight * index;
+
+  feedContainer.value.scrollTo({
+    top: targetPosition,
+    behavior: "smooth",
+  });
+};
+
+const toggleLike = (video) => {
+  videoStore.toggleLike(video.idVideoGenerado);
+  if (video.liked) {
+    $q.notify({
+      message: "Video añadido a Me gusta",
+      color: "positive",
+      icon: "favorite",
+    });
+  }
+};
+
+const toggleSave = (video) => {
+  videoStore.toggleSave(video.idVideoGenerado);
+  if (video.saved) {
+    $q.notify({
+      message: "Video guardado",
+      color: "positive",
+      icon: "bookmark",
+    });
+  }
+};
+
+const openComments = (video) => {
+  currentVideo.value = video;
+  showComments.value = true;
+};
+
+const addComment = () => {
+  if (!newComment.value.trim()) return;
+
+  videoStore.addComment(currentVideo.value.idVideoGenerado, newComment.value);
+  newComment.value = "";
+
+  $q.notify({
+    message: "Comentario añadido",
+    color: "positive",
+  });
+};
+
+const shareVideo = (video) => {
+  currentVideo.value = video;
+  showShare.value = true;
+};
+
+const copyLink = async () => {
   try {
-    // Simular el proceso
-    await simulateStep(1, "Buscando videos...");
-    await simulateStep(2, "Descargando videos...");
-    await simulateStep(3, "Extrayendo frames...");
-    await simulateStep(4, "Analizando contenido...");
-    await simulateStep(5, "Generando clips...");
-
-    // Simular resultados
-    analysisResults.value = generateMockResults();
-  } catch (error) {
-    console.error(error);
-    alert("Error en el proceso de análisis");
-  } finally {
-    isProcessing.value = false;
-    currentStep.value = 0;
-    currentProgress.value = "";
+    await navigator.clipboard.writeText(currentVideo.value.linkVideo);
+    $q.notify({
+      message: "Enlace copiado al portapapeles",
+      color: "positive",
+    });
+    showShare.value = false;
+  } catch (err) {
+    $q.notify({
+      message: "Error al copiar el enlace",
+      color: "negative",
+    });
   }
 };
 
-const simulateStep = async (step, message) => {
-  currentStep.value = step;
-  currentProgress.value = message;
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-};
+onMounted(() => {
+  if (window.matchMedia("(hover: none)").matches) {
+    // Es un dispositivo táctil
+    document.body.style.overscrollBehavior = "none";
+  }
+});
 
-const generateMockResults = () => {
-  return Array(3)
-    .fill(null)
-    .map((_, i) => ({
-      id: i + 1,
-      timestamp: new Date().toLocaleString(),
-      keyFrame: `/api/placeholder/300/200`,
-      clipUrl: "#",
-      cluster: i + 1,
-    }));
-};
-
-const downloadClip = (result) => {
-  // Aquí iría la lógica de descarga
-  alert(`Descargando clip del cluster ${result.cluster}`);
-};
-
-const previewClip = (result) => {
-  currentPreviewUrl.value = result.clipUrl;
-  showPreview.value = true;
-};
+onUnmounted(() => {
+  if (scrollTimeout) clearTimeout(scrollTimeout);
+  document.body.style.overscrollBehavior = "";
+});
 </script>
+
 <style scoped>
-/* Variables */
-:root {
-  --primary-color: #1976d2;
-  --primary-dark: #1565c0;
-  --success-color: #2ecc71;
-  --warning-color: #f1c40f;
-  --danger-color: #e74c3c;
-  --text-primary: #2d3748;
-  --text-secondary: #4a5568;
-  --border-color: #e2e8f0;
-  --bg-gray: #f8fafc;
-}
-
-/* Layout Base */
-.dashboard {
-  min-height: 100vh;
-  background: #f5f5f5;
-}
-
-/* Navbar */
-.navbar {
-  background: white;
-  padding: 1rem 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.logo {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: var(--primary-color);
-}
-
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.username {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.logout-btn {
-  padding: 0.5rem 1rem;
-  background: var(--danger-color);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.logout-btn:hover {
-  filter: brightness(90%);
-  transform: translateY(-1px);
-}
-
-/* Content Layout */
-.dashboard-content {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-/* Sección de Búsqueda */
-.search-section {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-h3 {
-  margin: 0 0 1.5rem 0;
-  color: var(--text-primary);
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.search-card {
-  background: var(--bg-gray);
-  border-radius: 8px;
-  padding: 1.5rem;
-}
-
-.search-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-group label {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.form-group input {
-  padding: 0.75rem;
-  border: 2px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 0.875rem;
-  transition: all 0.3s ease;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
-}
-
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.search-btn {
-  padding: 0.875rem;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.search-btn:hover:not(:disabled) {
-  background: var(--primary-dark);
-  transform: translateY(-1px);
-}
-
-.search-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-/* Progress Section */
-.progress-section {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.progress-card {
-  padding: 1rem;
-}
-
-.progress-steps {
-  display: flex;
-  justify-content: space-between;
-  margin: 2rem 0;
+.feed-container {
+  height: calc(100vh - 50px);
+  background: #000;
   position: relative;
+  overflow: hidden;
 }
 
-.progress-steps::before {
-  content: "";
+.video-feed {
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.video-feed::-webkit-scrollbar {
+  display: none;
+}
+
+.video-card {
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  position: relative;
+  overflow: hidden;
+}
+
+.video-wrapper {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  background: #000;
+}
+
+.video-player {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: opacity 0.3s ease;
+  opacity: 0;
+}
+
+.video-player.visible {
+  opacity: 1;
+}
+
+/* Botones de interacción verticales */
+.interaction-buttons-vertical {
   position: absolute;
-  top: 15px;
+  right: 16px;
+  bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 2;
+}
+
+.interaction-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: white;
+}
+
+.interaction-count {
+  font-size: 12px;
+  margin-top: 4px;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Información del video */
+.video-info {
+  position: absolute;
+  bottom: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: var(--border-color);
+  padding: 16px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+  color: white;
   z-index: 1;
 }
 
-.step {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
+.info-content {
+  max-width: calc(100% - 80px);
 }
 
-.step-number {
-  width: 32px;
-  height: 32px;
-  background: white;
-  border: 2px solid var(--border-color);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.video-title {
+  font-size: 1.1rem;
   font-weight: 600;
-  color: var(--text-secondary);
-  transition: all 0.3s ease;
+  margin-bottom: 4px;
 }
 
-.step.active .step-number {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: white;
+.video-details {
+  display: flex;
+  gap: 12px;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
 }
 
-.step.completed .step-number {
-  background: var(--success-color);
-  border-color: var(--success-color);
-  color: white;
+.category {
+  color: #fff;
 }
 
-.step-label {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  text-align: center;
+.duration {
+  color: rgba(255, 255, 255, 0.8);
 }
 
-.progress-details {
-  text-align: center;
-  color: var(--text-secondary);
-  margin-top: 1rem;
-  font-size: 0.875rem;
+.date {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
 }
 
-/* Results Section */
-.results-section {
+/* Comentarios */
+.comments-dialog {
+  width: 100%;
+  height: 100%;
   background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.results-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-.result-card {
-  background: var(--bg-gray);
+.comment {
+  padding: 12px;
   border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  transition: all 0.3s ease;
+  background: #f8f9fa;
+  margin-bottom: 12px;
 }
 
-.result-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.result-header {
-  padding: 1rem;
+.comment-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--border-color);
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
-.result-title {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.result-date {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.result-content {
-  padding: 1rem;
-}
-
-.frames-preview {
-  margin-bottom: 1rem;
-}
-
-.key-frame {
-  width: 100%;
-  height: 200px;
-  object-fit: cover;
-  border-radius: 4px;
-}
-
-.result-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.download-btn,
-.preview-btn {
+.comment-info {
   flex: 1;
-  padding: 0.5rem;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.download-btn {
-  background: var(--primary-color);
-  color: white;
-}
-
-.preview-btn {
-  background: var(--bg-gray);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-}
-
-.download-btn:hover {
-  background: var(--primary-dark);
-}
-
-.preview-btn:hover {
-  background: #e2e8f0;
-}
-
-/* Modal */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 90vh;
-  overflow: hidden;
-}
-
-.modal-header {
-  padding: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--text-secondary);
-}
-
-.modal-body {
-  padding: 1rem;
-}
-
-.modal-body video {
-  width: 100%;
-  border-radius: 4px;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .dashboard-content {
-    padding: 1rem;
-  }
-
-  .progress-steps {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-
-  .progress-steps::before {
-    display: none;
-  }
-
-  .step {
-    flex-direction: row;
-    width: 100%;
-  }
-
-  .results-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
-<style scoped>
-/* Layout Base */
-.dashboard {
-  min-height: 100vh;
-  background: #f5f5f5;
-}
-
-/* Navbar */
-.navbar {
-  background: white;
-  padding: 1rem 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.logo {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #1976d2;
-}
-
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
 }
 
 .username {
-  font-weight: 500;
-  color: #2d3748;
-}
-
-.logout-btn {
-  padding: 0.5rem 1rem;
-  background: #e74c3c;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.logout-btn:hover {
-  background: #c0392b;
-  transform: translateY(-1px);
-}
-
-/* Content Layout */
-.dashboard-content {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-/* Sección de Búsqueda */
-.search-section {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-h3 {
-  margin: 0 0 1.5rem 0;
-  color: #2d3748;
-  font-size: 1.25rem;
   font-weight: 600;
+  color: #2c3e50;
 }
 
-.search-card {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 1.5rem;
+.comment-date {
+  font-size: 0.8rem;
+  color: #666;
 }
 
-.search-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+.comment-content {
+  padding-left: 44px;
+  color: #2c3e50;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-group label {
-  color: #4a5568;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.form-group input {
-  padding: 0.75rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  transition: all 0.3s ease;
+.comment-input {
+  padding: 12px;
   background: white;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: #1976d2;
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
-}
-
-.form-group input[type="text"],
-.form-group input[type="number"] {
-  border: 1px solid #cbd5e0;
-}
-
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #4a5568;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.search-btn {
-  padding: 0.875rem;
-  background: #1976d2;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.search-btn:hover:not(:disabled) {
-  background: #1565c0;
-  transform: translateY(-1px);
-}
-
-.search-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-/* Progress Section */
-.progress-section {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.progress-steps {
-  display: flex;
-  justify-content: space-between;
-  margin: 2rem 0;
-  position: relative;
-}
-
-.progress-steps::before {
-  content: "";
-  position: absolute;
-  top: 15px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #e2e8f0;
-  z-index: 1;
-}
-
-.step {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.step-number {
-  width: 32px;
-  height: 32px;
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  color: #4a5568;
-  transition: all 0.3s ease;
-}
-
-.step.active .step-number {
-  background: #1976d2;
-  border-color: #1976d2;
-  color: white;
-}
-
-.step.completed .step-number {
-  background: #2ecc71;
-  border-color: #2ecc71;
-  color: white;
-}
-
-.step-label {
-  font-size: 0.75rem;
-  color: #4a5568;
-  text-align: center;
-}
-
-.progress-details {
-  text-align: center;
-  color: #4a5568;
-  margin-top: 1rem;
-  font-size: 0.875rem;
-}
-
-/* Results Section */
-.results-section {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.results-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-.result-card {
-  background: #f8fafc;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  transition: all 0.3s ease;
-}
-
-.result-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.result-header {
-  padding: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.result-title {
-  font-weight: 600;
-  color: #2d3748;
-}
-
-.result-date {
-  font-size: 0.75rem;
-  color: #4a5568;
-}
-
-.result-content {
-  padding: 1rem;
-}
-
-.frames-preview {
-  margin-bottom: 1rem;
-}
-
-.key-frame {
-  width: 100%;
-  height: 200px;
-  object-fit: cover;
-  border-radius: 4px;
-}
-
-.result-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.download-btn,
-.preview-btn {
-  flex: 1;
-  padding: 0.5rem;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.download-btn {
-  background: #1976d2;
-  color: white;
-}
-
-.preview-btn {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #2d3748;
-}
-
-.download-btn:hover {
-  background: #1565c0;
-}
-
-.preview-btn:hover {
-  background: #e2e8f0;
-}
-
-/* Modal */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: sticky;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  border-top: 1px solid #eee;
+}
+
+/* Compartir */
+.share-options {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 90vh;
-  overflow: hidden;
-}
-
-.modal-header {
-  padding: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #4a5568;
-}
-
-.modal-body {
-  padding: 1rem;
-}
-
-.modal-body video {
+.share-btn {
   width: 100%;
-  border-radius: 4px;
+  justify-content: flex-start;
+  padding: 8px 16px;
+  text-transform: none;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .dashboard-content {
-    padding: 1rem;
+@media (min-width: 768px) {
+  .video-player {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
   }
 
-  .progress-steps {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-
-  .progress-steps::before {
-    display: none;
-  }
-
-  .step {
-    flex-direction: row;
-    width: 100%;
-  }
-
-  .results-grid {
-    grid-template-columns: 1fr;
+  .comments-dialog {
+    width: 400px;
+    height: 100vh;
   }
 }
 </style>
