@@ -13,6 +13,7 @@ export const useVideoStore = defineStore("video", () => {
   const likedVideos = computed(() =>
     videos.value.filter((video) => video.liked)
   );
+
   const savedVideos = computed(() =>
     videos.value.filter((video) => video.saved)
   );
@@ -33,14 +34,19 @@ export const useVideoStore = defineStore("video", () => {
         throw new Error("No se encontraron videos en la carpeta");
       }
 
+      // Recuperar el estado guardado de los videos
+      const savedState = getSavedVideoState();
+
       // Fusionar con el estado guardado
       videos.value = driveVideos.map((video) => {
-        const savedState = getSavedVideoState(video.idVideoGenerado);
+        const savedVideo = savedState.find(
+          (v) => v.id === video.idVideoGenerado
+        );
         return {
           ...video,
-          liked: savedState?.liked || false,
-          saved: savedState?.saved || false,
-          comments: savedState?.comments || [],
+          liked: savedVideo?.liked || false,
+          saved: savedVideo?.saved || false,
+          comments: savedVideo?.comments || [],
         };
       });
 
@@ -50,7 +56,7 @@ export const useVideoStore = defineStore("video", () => {
       console.error("Error en fetchVideos:", err);
       error.value = err.message || "Error al cargar los videos";
 
-      // Intentar cargar desde caché si hay un error
+      // Intentar cargar desde caché
       const cachedVideos = localStorage.getItem("driveVideos");
       if (cachedVideos) {
         console.log("Cargando videos desde caché...");
@@ -61,13 +67,9 @@ export const useVideoStore = defineStore("video", () => {
     }
   }
 
-  function getSavedVideoState(videoId) {
+  function getSavedVideoState() {
     const savedState = localStorage.getItem("videoState");
-    if (savedState) {
-      const state = JSON.parse(savedState);
-      return state.find((v) => v.id === videoId);
-    }
-    return null;
+    return savedState ? JSON.parse(savedState) : [];
   }
 
   function toggleLike(videoId) {
@@ -106,6 +108,7 @@ export const useVideoStore = defineStore("video", () => {
   }
 
   function saveToLocalStorage() {
+    // Guardar el estado de los videos (likes, guardados, comentarios)
     const state = videos.value.map((video) => ({
       id: video.idVideoGenerado,
       liked: video.liked,
@@ -113,6 +116,8 @@ export const useVideoStore = defineStore("video", () => {
       comments: video.comments || [],
     }));
     localStorage.setItem("videoState", JSON.stringify(state));
+
+    // Guardar los videos completos para caché
     localStorage.setItem("driveVideos", JSON.stringify(videos.value));
     localStorage.setItem("lastVideoFetch", Date.now().toString());
   }

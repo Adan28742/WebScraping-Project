@@ -9,8 +9,9 @@
 
     <!-- Error state -->
     <div v-else-if="error" class="error-state">
+      <q-icon name="error_outline" size="4em" color="negative" />
       <p>{{ error }}</p>
-      <q-btn color="primary" @click="retryLoading">Reintentar</q-btn>
+      <q-btn color="primary" @click="retryLoading" label="Reintentar" />
     </div>
 
     <!-- Videos feed -->
@@ -22,22 +23,6 @@
         :class="{ active: currentVideoIndex === index }"
       >
         <div class="video-wrapper">
-          <!-- Debug info -->
-          <div
-            class="debug-info"
-            style="
-              position: absolute;
-              top: 0;
-              left: 0;
-              background: rgba(0, 0, 0, 0.5);
-              color: white;
-              padding: 5px;
-              z-index: 10;
-            "
-          >
-            Video ID: {{ video.idVideoGenerado }}
-          </div>
-
           <iframe
             :src="getEmbedUrl(video.linkVideo)"
             frameborder="0"
@@ -54,12 +39,20 @@
                 flat
                 round
                 :color="video.liked ? 'red' : 'white'"
-                icon="favorite"
+                :icon="video.liked ? 'favorite' : 'favorite_border'"
                 @click="toggleLike(video)"
               >
                 <q-tooltip>Me gusta</q-tooltip>
               </q-btn>
-              <span class="interaction-count">{{ video.likes || 0 }}</span>
+              <transition name="count" mode="out-in">
+                <span
+                  class="interaction-count"
+                  :key="video.likeCount"
+                  v-if="video.likeCount > 0"
+                >
+                  {{ formatCount(video.likeCount) }}
+                </span>
+              </transition>
             </div>
 
             <div class="interaction-button">
@@ -67,10 +60,12 @@
                 flat
                 round
                 :color="video.saved ? 'primary' : 'white'"
-                icon="bookmark"
+                :icon="video.saved ? 'bookmark' : 'bookmark_border'"
                 @click="toggleSave(video)"
               >
-                <q-tooltip>Guardar</q-tooltip>
+                <q-tooltip>
+                  {{ video.saved ? "Guardado" : "Guardar video" }}
+                </q-tooltip>
               </q-btn>
             </div>
           </div>
@@ -93,6 +88,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Notificación de guardado -->
+    <q-dialog v-model="showSaveNotification" position="bottom">
+      <q-card class="save-notification">
+        <q-card-section class="row items-center">
+          <span class="text-h6">Video guardado</span>
+          <q-space />
+          <q-btn flat round icon="close" v-close-popup />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            color="primary"
+            label="Ver guardados"
+            @click="goToSaved"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -100,11 +114,14 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useVideoStore } from "src/stores/video";
 import { useQuasar } from "quasar";
+import { useRouter } from "vue-router";
 
 const $q = useQuasar();
+const router = useRouter();
 const videoStore = useVideoStore();
 const feedContainer = ref(null);
 const currentVideoIndex = ref(0);
+const showSaveNotification = ref(false);
 let scrollTimeout = null;
 
 // Computed properties
@@ -119,6 +136,17 @@ const getEmbedUrl = (url) => {
   const embedUrl = `https://drive.google.com/file/d/${videoId}/preview`;
   console.log("Embed URL:", embedUrl);
   return embedUrl;
+};
+
+// Añadir función para formatear el contador
+const formatCount = (count) => {
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  }
+  return count.toString();
 };
 
 const formatDate = (dateString) => {
@@ -162,26 +190,43 @@ const snapToVideo = (index) => {
   });
 };
 
+// Función actualizada de toggleLike
 const toggleLike = (video) => {
+  // Guardamos el estado anterior
+  const wasLiked = video.liked;
   videoStore.toggleLike(video.idVideoGenerado);
-  if (video.liked) {
+};
+
+const toggleSave = (video) => {
+  // Guardamos el estado anterior
+  const wasSaved = video.saved;
+  videoStore.toggleSave(video.idVideoGenerado);
+
+  // Mostramos la notificación correspondiente
+  if (!wasSaved) {
+    // Si no estaba guardado antes
     $q.notify({
-      message: "Video añadido a Me gusta",
+      message: "Video añadido a guardados",
       color: "positive",
-      icon: "favorite",
+      icon: "bookmark",
+      position: "top",
+      timeout: 2000,
+    });
+  } else {
+    // Si ya estaba guardado
+    $q.notify({
+      message: "Video eliminado de guardados",
+      color: "negative",
+      icon: "bookmark_border",
+      position: "top",
+      timeout: 2000,
     });
   }
 };
 
-const toggleSave = (video) => {
-  videoStore.toggleSave(video.idVideoGenerado);
-  if (video.saved) {
-    $q.notify({
-      message: "Video guardado",
-      color: "positive",
-      icon: "bookmark",
-    });
-  }
+const goToSaved = () => {
+  showSaveNotification.value = false;
+  router.push("/guardados");
 };
 
 const retryLoading = () => {
@@ -215,6 +260,15 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   color: white;
+  text-align: center;
+  gap: 1rem;
+}
+
+.loading-state p,
+.error-state p {
+  margin-top: 1rem;
+  font-size: 1.1rem;
+  opacity: 0.8;
 }
 
 .video-feed {
@@ -222,6 +276,7 @@ onUnmounted(() => {
   overflow-y: scroll;
   scroll-snap-type: y mandatory;
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .video-feed::-webkit-scrollbar {
@@ -259,6 +314,42 @@ onUnmounted(() => {
   padding: 20px;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
   color: white;
+  z-index: 2;
+}
+
+.info-content {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.video-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.video-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.category {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.duration {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.date {
+  font-size: 0.8rem;
+  opacity: 0.7;
 }
 
 .interaction-buttons-vertical {
@@ -281,5 +372,201 @@ onUnmounted(() => {
   color: white;
   font-size: 12px;
   margin-top: 4px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Estilo para botones de interacción */
+.interaction-button .q-btn {
+  backdrop-filter: blur(4px);
+  background: rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.interaction-button .q-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.video-card.active {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.video-info {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Estados de carga y error */
+.loading-state .q-spinner {
+  margin-bottom: 1rem;
+}
+
+.error-state .q-icon {
+  margin-bottom: 1rem;
+}
+
+/* Estilos para la notificación de guardado */
+.save-notification {
+  background: white;
+  border-radius: 8px;
+  margin: 16px;
+  min-width: 300px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .video-info {
+    padding: 16px;
+  }
+
+  .video-title {
+    font-size: 1rem;
+  }
+
+  .interaction-buttons-vertical {
+    right: 8px;
+    bottom: 80px;
+  }
+
+  .category {
+    font-size: 0.8rem;
+    padding: 3px 6px;
+  }
+
+  .duration,
+  .date {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .interaction-buttons-vertical {
+    right: 4px;
+    bottom: 60px;
+    gap: 12px;
+  }
+
+  .video-info {
+    padding: 12px;
+  }
+
+  .info-content {
+    width: 100%;
+  }
+
+  .save-notification {
+    min-width: auto;
+    margin: 8px;
+    width: calc(100% - 16px);
+  }
+}
+
+/* Transiciones suaves */
+.video-player,
+.video-info,
+.interaction-buttons-vertical {
+  transition: all 0.3s ease;
+}
+
+/* Efecto hover para los botones */
+.q-btn {
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.q-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Estilos para el modo oscuro */
+@media (prefers-color-scheme: dark) {
+  .save-notification {
+    background: #1d1d1d;
+    color: white;
+  }
+}
+
+.interaction-count {
+  color: white;
+  font-size: 12px;
+  margin-top: 4px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+.interaction-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Animación para el contador */
+@keyframes countPop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.interaction-count {
+  animation: countPop 0.3s ease-out;
+}
+
+/* Añade estos estilos a la sección <style> de tu componente */
+
+.count-enter-active,
+.count-leave-active {
+  transition: all 0.3s ease;
+}
+
+.count-enter-from,
+.count-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.count-enter-to,
+.count-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.interaction-count {
+  color: white;
+  font-size: 12px;
+  margin-top: 4px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+  position: relative;
 }
 </style>
