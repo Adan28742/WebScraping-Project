@@ -5,7 +5,10 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile,
+  updateProfile as updateFirebaseProfile,
+  updatePassword as firebaseUpdatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
 } from "firebase/auth";
 import { firebaseAuth } from "../config/firebase";
 
@@ -27,7 +30,8 @@ export const useAuthStore = defineStore("auth", () => {
         username: userCredential.user.displayName || email.split("@")[0],
         avatar:
           userCredential.user.photoURL ||
-          "https://cdn.quasar.dev/img/boy-avatar.png",
+          "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix",
+        createdAt: userCredential.user.metadata.creationTime,
       };
       user.value = userData;
       localStorage.setItem("user", JSON.stringify(userData));
@@ -35,6 +39,60 @@ export const useAuthStore = defineStore("auth", () => {
     } catch (error) {
       console.error("Error en login:", error);
       throw new Error(getAuthErrorMessage(error.code));
+    }
+  };
+
+  // Actualizar perfil
+  const updateProfile = async (profileData) => {
+    try {
+      const currentUser = firebaseAuth.currentUser;
+      if (!currentUser) throw new Error("No hay usuario autenticado");
+
+      // Actualizar perfil en Firebase
+      await updateFirebaseProfile(currentUser, {
+        displayName: profileData.username,
+        photoURL: profileData.avatar,
+      });
+
+      // Actualizar estado local
+      const updatedUserData = {
+        ...user.value,
+        username: profileData.username,
+        avatar: profileData.avatar,
+        email: profileData.email,
+      };
+
+      user.value = updatedUserData;
+      localStorage.setItem("user", JSON.stringify(updatedUserData));
+
+      return updatedUserData;
+    } catch (error) {
+      console.error("Error actualizando perfil:", error);
+      throw new Error("Error al actualizar el perfil");
+    }
+  };
+
+  // Actualizar contraseña
+  const updateUserPassword = async (currentPassword, newPassword) => {
+    try {
+      const currentUser = firebaseAuth.currentUser;
+      if (!currentUser) throw new Error("No hay usuario autenticado");
+
+      // Reautenticar usuario
+      const credential = EmailAuthProvider.credential(
+        currentUser.email,
+        currentPassword
+      );
+      await reauthenticateWithCredential(currentUser, credential);
+
+      // Actualizar contraseña
+      await firebaseUpdatePassword(currentUser, newPassword);
+    } catch (error) {
+      console.error("Error actualizando contraseña:", error);
+      if (error.code === "auth/wrong-password") {
+        throw new Error("La contraseña actual es incorrecta");
+      }
+      throw new Error("Error al actualizar la contraseña");
     }
   };
 
@@ -48,16 +106,17 @@ export const useAuthStore = defineStore("auth", () => {
       );
       const displayName = `${nombres} ${apellidos}`;
 
-      await updateProfile(userCredential.user, {
+      await updateFirebaseProfile(userCredential.user, {
         displayName,
-        photoURL: "https://cdn.quasar.dev/img/boy-avatar.png",
+        photoURL: "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix",
       });
 
       const userData = {
         id: userCredential.user.uid,
         email: userCredential.user.email,
         username: displayName,
-        avatar: "https://cdn.quasar.dev/img/boy-avatar.png",
+        avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix",
+        createdAt: userCredential.user.metadata.creationTime,
       };
 
       user.value = userData;
@@ -69,7 +128,7 @@ export const useAuthStore = defineStore("auth", () => {
     }
   };
 
-  // Logout con Firebase
+  // Logout
   const logout = async () => {
     try {
       await signOut(firebaseAuth);
@@ -120,7 +179,8 @@ export const useAuthStore = defineStore("auth", () => {
             firebaseUser.displayName || firebaseUser.email.split("@")[0],
           avatar:
             firebaseUser.photoURL ||
-            "https://cdn.quasar.dev/img/boy-avatar.png",
+            "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix",
+          createdAt: firebaseUser.metadata.creationTime,
         };
         user.value = userData;
         localStorage.setItem("user", JSON.stringify(userData));
@@ -140,5 +200,7 @@ export const useAuthStore = defineStore("auth", () => {
     login,
     register,
     logout,
+    updateProfile,
+    updateUserPassword,
   };
 });

@@ -286,12 +286,15 @@ const avatarDialog = ref(false);
 const selectedAvatar = ref("");
 
 const avatarOptions = [
-  "https://cdn.quasar.dev/img/boy-avatar.png",
-  "https://cdn.quasar.dev/img/avatar1.jpg",
-  "https://cdn.quasar.dev/img/avatar2.jpg",
-  "https://cdn.quasar.dev/img/avatar3.jpg",
-  "https://cdn.quasar.dev/img/avatar4.jpg",
-  "https://cdn.quasar.dev/img/avatar5.jpg",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Aneka",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Milo",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Luna",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Nova",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Leo",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Kai",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Aria",
+  "https://api.dicebear.com/7.x/adventurer/svg?seed=Zoe",
 ];
 
 const form = ref({
@@ -428,7 +431,7 @@ const onSubmit = async () => {
 
     // Si hay nueva contraseña, actualizarla
     if (form.value.newPassword) {
-      await authStore.updatePassword(
+      await authStore.updateUserPassword(
         form.value.currentPassword,
         form.value.newPassword
       );
