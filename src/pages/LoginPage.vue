@@ -211,7 +211,7 @@
   </div>
 </template>
 
-// src/pages/LoginPage.vue - Actualizar la sección del script
+// LoginPage.vue - script section
 <script setup>
 import { ref, reactive } from "vue";
 import { useRouter } from "vue-router";
@@ -265,7 +265,6 @@ const validateForm = () => {
   return isValid;
 };
 
-// Form submission
 const onSubmit = async () => {
   if (!validateForm()) return;
 
@@ -273,14 +272,12 @@ const onSubmit = async () => {
   try {
     await authStore.login(email.value, password.value);
 
-    // Guardar email si "recordarme" está activado
     if (rememberMe.value) {
       localStorage.setItem("rememberedEmail", email.value);
     } else {
       localStorage.removeItem("rememberedEmail");
     }
 
-    // Mostrar notificación de éxito
     $q.notify({
       type: "positive",
       message: "¡Bienvenido de vuelta!",
@@ -289,46 +286,13 @@ const onSubmit = async () => {
 
     router.push("/");
   } catch (error) {
-    errors.email = "Correo electrónico o contraseña incorrectos";
-
-    // Mostrar notificación de error
     $q.notify({
       type: "negative",
-      message: "Credenciales incorrectas",
+      message: error.message,
       position: "top",
     });
   } finally {
     loading.value = false;
-  }
-};
-
-// Reset password
-const closeResetDialog = () => {
-  showResetDialog.value = false;
-  resetEmail.value = "";
-};
-
-const handleResetPassword = async () => {
-  if (!resetEmail.value) return;
-
-  resetLoading.value = true;
-  try {
-    // Simular envío de correo de recuperación
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    $q.notify({
-      type: "positive",
-      message: "Se han enviado las instrucciones a tu correo",
-      position: "top",
-    });
-    closeResetDialog();
-  } catch (error) {
-    $q.notify({
-      type: "negative",
-      message: "Error al enviar las instrucciones",
-      position: "top",
-    });
-  } finally {
-    resetLoading.value = false;
   }
 };
 
@@ -339,6 +303,7 @@ if (rememberedEmail) {
   rememberMe.value = true;
 }
 </script>
+
 <style scoped>
 :root {
   --primary-blue: #0396ff;

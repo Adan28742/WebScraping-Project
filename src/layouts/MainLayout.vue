@@ -1,4 +1,4 @@
-<!-- src/layouts/MainLayout.vue -->
+//src/layouts/MainLayout.vue
 <template>
   <q-layout view="lHh Lpr lFf">
     <q-header elevated class="bg-primary">
@@ -94,27 +94,38 @@
 <script setup>
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
-import { useUserStore } from "src/stores/user";
+import { useAuthStore } from "src/stores/auth";
+import { useQuasar } from "quasar";
 
 const router = useRouter();
-const userStore = useUserStore();
+const authStore = useAuthStore();
+const $q = useQuasar();
 
 const leftDrawerOpen = ref(false);
-const isAuthenticated = computed(() => userStore.isAuthenticated);
-const username = computed(() => userStore.user?.username || "Usuario");
+const isAuthenticated = computed(() => authStore.isAuthenticated);
+const username = computed(() => authStore.user?.username || "Usuario");
 const userAvatar = computed(
-  () =>
-    userStore.preferences?.avatar || "https://cdn.quasar.dev/img/boy-avatar.png"
+  () => authStore.user?.avatar || "https://cdn.quasar.dev/img/boy-avatar.png"
 );
 
 const toggleLeftDrawer = () => {
   leftDrawerOpen.value = !leftDrawerOpen.value;
 };
 
-// src/layouts/MainLayout.vue - Actualizar el handleLogout
-const handleLogout = () => {
-  userStore.logout();
-  router.push("/auth/login"); // Quitamos el prefijo
+const handleLogout = async () => {
+  try {
+    await authStore.logout();
+    $q.notify({
+      type: "positive",
+      message: "Sesión cerrada exitosamente",
+    });
+    router.push("/auth/login");
+  } catch (error) {
+    $q.notify({
+      type: "negative",
+      message: "Error al cerrar sesión",
+    });
+  }
 };
 </script>
 

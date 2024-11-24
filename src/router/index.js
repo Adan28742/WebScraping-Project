@@ -1,46 +1,31 @@
 // src/router/index.js
 import { route } from "quasar/wrappers";
-import {
-  createRouter,
-  createMemoryHistory,
-  createWebHistory,
-  createWebHashHistory,
-} from "vue-router";
+import { createRouter, createWebHashHistory } from "vue-router";
 import routes from "./routes";
-import { useAuthStore } from "src/stores/auth";
+import { firebaseAuth } from "src/config/firebase";
 
-export default route(function ({ ssrContext }) {
-  let createHistory;
-
-  if (typeof ssrContext !== "undefined") {
-    createHistory = createMemoryHistory;
-  } else {
-    createHistory =
-      window.location.protocol === "file:"
-        ? createWebHashHistory
-        : createWebHistory;
-  }
-
+export default route(function () {
   const Router = createRouter({
     scrollBehavior: () => ({ left: 0, top: 0 }),
     routes,
-    history: createHistory("/WebScraping-Project/"),
+    // Ya que estás usando modo hash en quasar.config.js
+    history: createWebHashHistory(),
   });
 
   Router.beforeEach((to, from, next) => {
-    const authStore = useAuthStore();
     const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+    const isAuthRoute = to.path.startsWith("/auth");
 
-    if (requiresAuth && !authStore.isAuthenticated) {
-      next("/auth/login"); // Quitamos el prefijo, el router lo manejará automáticamente
-    } else if (
-      (to.path === "/auth/login" || to.path === "/auth/register") &&
-      authStore.isAuthenticated
-    ) {
-      next("/"); // Quitamos el prefijo, el router lo manejará automáticamente
-    } else {
-      next();
-    }
+    const unsubscribe = firebaseAuth.onAuthStateChanged((user) => {
+      if (requiresAuth && !user) {
+        next("/auth/login");
+      } else if (isAuthRoute && user) {
+        next("/");
+      } else {
+        next();
+      }
+      unsubscribe(); // Limpiar el listener después de la primera ejecución
+    });
   });
 
   return Router;

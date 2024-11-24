@@ -255,13 +255,16 @@
   </div>
 </template>
 
+// RegisterPage.vue - script section
 <script setup>
 import { ref, reactive } from "vue";
-import { useAuthStore } from "src/stores/auth";
 import { useRouter } from "vue-router";
+import { useAuthStore } from "src/stores/auth";
+import { useQuasar } from "quasar";
 
 const router = useRouter();
 const authStore = useAuthStore();
+const $q = useQuasar();
 
 // Form fields
 const nombres = ref("");
@@ -330,7 +333,6 @@ const validateForm = () => {
   return isValid;
 };
 
-// Form submission
 const onSubmit = async () => {
   if (!validateForm()) return;
 
@@ -342,13 +344,20 @@ const onSubmit = async () => {
       email: email.value,
       password: password.value,
     });
-    router.push("/auth/login"); // Quitamos el prefijo
+
+    $q.notify({
+      type: "positive",
+      message: "Cuenta creada exitosamente",
+      position: "top",
+    });
+
+    router.push("/auth/login");
   } catch (error) {
-    if (error.message.includes("exists")) {
-      errors.email = "Este correo electrónico ya está registrado";
-    } else {
-      errors.email = error.message;
-    }
+    $q.notify({
+      type: "negative",
+      message: error.message,
+      position: "top",
+    });
   } finally {
     loading.value = false;
   }
