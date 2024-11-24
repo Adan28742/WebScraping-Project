@@ -1,4 +1,4 @@
-//src/layouts/MainLayout.vue
+<!-- src/layouts/MainLayout.vue -->
 <template>
   <q-layout view="lHh Lpr lFf">
     <q-header elevated class="bg-primary">
@@ -13,7 +13,7 @@
           @click="toggleLeftDrawer"
         />
 
-        <q-toolbar-title> Video Analysis Dashboard </q-toolbar-title>
+        <q-toolbar-title>Video Analysis Dashboard</q-toolbar-title>
 
         <q-btn-dropdown
           flat
@@ -55,14 +55,16 @@
 
     <q-drawer
       v-model="leftDrawerOpen"
-      :mini="true"
+      :mini="miniState"
+      @mouseover="miniState = false"
+      @mouseout="miniState = true"
       :width="200"
       bordered
       show-if-above
       class="bg-white"
     >
       <q-list>
-        <q-item clickable v-ripple to="/" exact>
+        <q-item clickable v-ripple to="/">
           <q-item-section avatar>
             <q-icon name="home" />
           </q-item-section>
@@ -102,6 +104,7 @@ const authStore = useAuthStore();
 const $q = useQuasar();
 
 const leftDrawerOpen = ref(false);
+const miniState = ref(true);
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 const username = computed(() => authStore.user?.username || "Usuario");
 const userAvatar = computed(

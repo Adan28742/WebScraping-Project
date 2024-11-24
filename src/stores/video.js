@@ -2,46 +2,12 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { useUserStore } from "./user";
+import { googleDriveService } from "../services/googleDriveService";
 
 export const useVideoStore = defineStore("video", () => {
-  const videos = ref([
-    {
-      idVideoGenerado: 1,
-      idCategoria: 1,
-      fechaCreacion: "2024-11-05T22:23:51.693",
-      linkVideo:
-        "https://drive.google.com/file/d/1GEd0buzM3R4VyBuVly3Ayh1Rl8YfEMki/view?usp=drive_link",
-      estado: true,
-      duracion: 10,
-      liked: false,
-      saved: false,
-      comments: [],
-    },
-    {
-      idVideoGenerado: 2,
-      idCategoria: 2,
-      fechaCreacion: "2024-11-05T22:24:51.693",
-      linkVideo:
-        "https://drive.google.com/file/d/1p0FwI2QgInjEty5T3pRNi5N7MCVdu-eL/view?usp=drive_link",
-      estado: true,
-      duracion: 15,
-      liked: false,
-      saved: false,
-      comments: [],
-    },
-    {
-      idVideoGenerado: 3,
-      idCategoria: 1,
-      fechaCreacion: "2024-11-05T22:25:51.693",
-      linkVideo:
-        "https://drive.google.com/file/d/19wVQTOwyds9QhfaDI-3l128WO_W0CJfB/view?usp=drive_link",
-      estado: true,
-      duracion: 12,
-      liked: false,
-      saved: false,
-      comments: [],
-    },
-  ]);
+  const videos = ref([]);
+  const loading = ref(false);
+  const error = ref(null);
 
   // Getters
   const likedVideos = computed(() =>
@@ -52,11 +18,62 @@ export const useVideoStore = defineStore("video", () => {
   );
 
   // Actions
+  async function fetchVideos() {
+    loading.value = true;
+    error.value = null;
+    console.log("Iniciando fetchVideos...");
+
+    try {
+      // Obtener videos de Drive
+      console.log("Llamando a googleDriveService.getVideosFromFolder()...");
+      const driveVideos = await googleDriveService.getVideosFromFolder();
+      console.log("Videos obtenidos de Drive:", driveVideos);
+
+      if (!driveVideos || driveVideos.length === 0) {
+        throw new Error("No se encontraron videos en la carpeta");
+      }
+
+      // Fusionar con el estado guardado
+      videos.value = driveVideos.map((video) => {
+        const savedState = getSavedVideoState(video.idVideoGenerado);
+        return {
+          ...video,
+          liked: savedState?.liked || false,
+          saved: savedState?.saved || false,
+          comments: savedState?.comments || [],
+        };
+      });
+
+      console.log("Videos procesados y guardados en el store:", videos.value);
+      saveToLocalStorage();
+    } catch (err) {
+      console.error("Error en fetchVideos:", err);
+      error.value = err.message || "Error al cargar los videos";
+
+      // Intentar cargar desde caché si hay un error
+      const cachedVideos = localStorage.getItem("driveVideos");
+      if (cachedVideos) {
+        console.log("Cargando videos desde caché...");
+        videos.value = JSON.parse(cachedVideos);
+      }
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  function getSavedVideoState(videoId) {
+    const savedState = localStorage.getItem("videoState");
+    if (savedState) {
+      const state = JSON.parse(savedState);
+      return state.find((v) => v.id === videoId);
+    }
+    return null;
+  }
+
   function toggleLike(videoId) {
     const video = videos.value.find((v) => v.idVideoGenerado === videoId);
     if (video) {
       video.liked = !video.liked;
-      // Guardar en localStorage
       saveToLocalStorage();
     }
   }
@@ -65,7 +82,6 @@ export const useVideoStore = defineStore("video", () => {
     const video = videos.value.find((v) => v.idVideoGenerado === videoId);
     if (video) {
       video.saved = !video.saved;
-      // Guardar en localStorage
       saveToLocalStorage();
     }
   }
@@ -83,31 +99,34 @@ export const useVideoStore = defineStore("video", () => {
           "https://cdn.quasar.dev/img/boy-avatar.png",
         date: new Date().toISOString(),
       };
+      if (!video.comments) video.comments = [];
       video.comments.push(comment);
-      // Guardar en localStorage
       saveToLocalStorage();
     }
   }
 
-  // LocalStorage
   function saveToLocalStorage() {
-    localStorage.setItem("videos", JSON.stringify(videos.value));
+    const state = videos.value.map((video) => ({
+      id: video.idVideoGenerado,
+      liked: video.liked,
+      saved: video.saved,
+      comments: video.comments || [],
+    }));
+    localStorage.setItem("videoState", JSON.stringify(state));
+    localStorage.setItem("driveVideos", JSON.stringify(videos.value));
+    localStorage.setItem("lastVideoFetch", Date.now().toString());
   }
 
-  function loadFromLocalStorage() {
-    const savedVideos = localStorage.getItem("videos");
-    if (savedVideos) {
-      videos.value = JSON.parse(savedVideos);
-    }
-  }
-
-  // Cargar datos al iniciar
-  loadFromLocalStorage();
+  // Cargar videos al inicializar el store
+  fetchVideos();
 
   return {
     videos,
+    loading,
+    error,
     likedVideos,
     savedVideos,
+    fetchVideos,
     toggleLike,
     toggleSave,
     addComment,
