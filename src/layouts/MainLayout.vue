@@ -111,9 +111,10 @@ const toggleLeftDrawer = () => {
   leftDrawerOpen.value = !leftDrawerOpen.value;
 };
 
-const handleLogout = async () => {
+// src/layouts/MainLayout.vue - Actualizar el handleLogout
+const handleLogout = () => {
   userStore.logout();
-  router.push("/auth/login");
+  router.push("/auth/login"); // Quitamos el prefijo
 };
 </script>
 

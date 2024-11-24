@@ -7,12 +7,7 @@ import {
   createWebHashHistory,
 } from "vue-router";
 import routes from "./routes";
-import { useUserStore } from "src/stores/user";
-
-/*
- * If not building with SSR mode, you can
- * directly export the Router instantiation;
- */
+import { useAuthStore } from "src/stores/auth";
 
 export default route(function ({ ssrContext }) {
   let createHistory;
@@ -33,16 +28,16 @@ export default route(function ({ ssrContext }) {
   });
 
   Router.beforeEach((to, from, next) => {
-    const userStore = useUserStore();
+    const authStore = useAuthStore();
     const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
 
-    if (requiresAuth && !userStore.isAuthenticated) {
-      next("/auth/login");
+    if (requiresAuth && !authStore.isAuthenticated) {
+      next("/auth/login"); // Quitamos el prefijo, el router lo manejará automáticamente
     } else if (
       (to.path === "/auth/login" || to.path === "/auth/register") &&
-      userStore.isAuthenticated
+      authStore.isAuthenticated
     ) {
-      next("/");
+      next("/"); // Quitamos el prefijo, el router lo manejará automáticamente
     } else {
       next();
     }

@@ -248,7 +248,7 @@
         <!-- Login Link -->
         <div class="login-link">
           ¿Ya tienes una cuenta?
-          <router-link to="/login">Iniciar sesión</router-link>
+          <router-link to="/auth/login">Iniciar sesión</router-link>
         </div>
       </form>
     </div>
@@ -342,7 +342,7 @@ const onSubmit = async () => {
       email: email.value,
       password: password.value,
     });
-    router.push("/login");
+    router.push("/auth/login"); // Quitamos el prefijo
   } catch (error) {
     if (error.message.includes("exists")) {
       errors.email = "Este correo electrónico ya está registrado";

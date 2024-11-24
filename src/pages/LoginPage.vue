@@ -142,7 +142,7 @@
 
             <!-- Login Button -->
             <button type="submit" class="login-btn" :disabled="loading">
-              <span class="btn-content" :class="{ loading: loading }">
+              <span class="btn-content" :class="{ loading }">
                 <span class="btn-text">{{
                   loading ? "Iniciando sesión..." : "Iniciar sesión"
                 }}</span>
@@ -153,7 +153,7 @@
             <!-- Register Link -->
             <div class="register-link">
               ¿No tienes una cuenta?
-              <router-link to="/register">Crear cuenta</router-link>
+              <router-link to="/auth/register">Crear cuenta</router-link>
             </div>
           </form>
         </div>
@@ -211,12 +211,15 @@
   </div>
 </template>
 
+// src/pages/LoginPage.vue - Actualizar la sección del script
 <script setup>
 import { ref, reactive } from "vue";
-import { useAuthStore } from "src/stores/auth";
 import { useRouter } from "vue-router";
+import { useAuthStore } from "src/stores/auth";
+import { useQuasar } from "quasar";
 
 const router = useRouter();
+const $q = useQuasar();
 const authStore = useAuthStore();
 
 // Form state
@@ -225,6 +228,11 @@ const password = ref("");
 const showPassword = ref(false);
 const loading = ref(false);
 const rememberMe = ref(false);
+
+// Reset Password
+const showResetDialog = ref(false);
+const resetEmail = ref("");
+const resetLoading = ref(false);
 
 // Errors state
 const errors = reactive({
@@ -237,21 +245,15 @@ const clearError = (field) => {
   errors[field] = "";
 };
 
-// Validate email format
-const isValidEmail = (email) => {
-  const re =
-    /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-  return re.test(String(email).toLowerCase());
-};
-
+// Form validation
 const validateForm = () => {
   let isValid = true;
 
   // Reset errors
   Object.keys(errors).forEach((key) => (errors[key] = ""));
 
-  if (!email.value.trim() || !isValidEmail(email.value)) {
-    errors.email = "Por favor ingrese un correo electrónico válido";
+  if (!email.value.trim()) {
+    errors.email = "Por favor ingrese su correo electrónico";
     isValid = false;
   }
 
@@ -263,6 +265,7 @@ const validateForm = () => {
   return isValid;
 };
 
+// Form submission
 const onSubmit = async () => {
   if (!validateForm()) return;
 
@@ -270,21 +273,66 @@ const onSubmit = async () => {
   try {
     await authStore.login(email.value, password.value);
 
+    // Guardar email si "recordarme" está activado
     if (rememberMe.value) {
       localStorage.setItem("rememberedEmail", email.value);
     } else {
       localStorage.removeItem("rememberedEmail");
     }
 
+    // Mostrar notificación de éxito
+    $q.notify({
+      type: "positive",
+      message: "¡Bienvenido de vuelta!",
+      position: "top",
+    });
+
     router.push("/");
   } catch (error) {
     errors.email = "Correo electrónico o contraseña incorrectos";
+
+    // Mostrar notificación de error
+    $q.notify({
+      type: "negative",
+      message: "Credenciales incorrectas",
+      position: "top",
+    });
   } finally {
     loading.value = false;
   }
 };
 
-// Check for remembered email
+// Reset password
+const closeResetDialog = () => {
+  showResetDialog.value = false;
+  resetEmail.value = "";
+};
+
+const handleResetPassword = async () => {
+  if (!resetEmail.value) return;
+
+  resetLoading.value = true;
+  try {
+    // Simular envío de correo de recuperación
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    $q.notify({
+      type: "positive",
+      message: "Se han enviado las instrucciones a tu correo",
+      position: "top",
+    });
+    closeResetDialog();
+  } catch (error) {
+    $q.notify({
+      type: "negative",
+      message: "Error al enviar las instrucciones",
+      position: "top",
+    });
+  } finally {
+    resetLoading.value = false;
+  }
+};
+
+// Check for remembered email on mount
 const rememberedEmail = localStorage.getItem("rememberedEmail");
 if (rememberedEmail) {
   email.value = rememberedEmail;

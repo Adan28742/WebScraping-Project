@@ -1,37 +1,30 @@
 // src/stores/auth.js
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { ref, computed } from "vue";
 
 export const useAuthStore = defineStore("auth", () => {
-  const storedUser = localStorage.getItem("user");
-  const user = ref(storedUser ? JSON.parse(storedUser) : null);
-  const users = ref(JSON.parse(localStorage.getItem("users") || "[]"));
+  // Estado
+  const user = ref(null);
+  const isAuthenticated = computed(() => user.value !== null);
 
-  function register({ nombres, apellidos, email, password }) {
-    // Verificar si el email ya existe
-    if (users.value.find((u) => u.email === email)) {
-      return Promise.reject(
-        new Error("Este correo electrónico ya está registrado")
-      );
+  // Acciones
+  const login = async (email, password) => {
+    // Usuario de prueba para desarrollo
+    if (email === "admin@admin.com" && password === "admin") {
+      const userData = {
+        id: 1,
+        email: "admin@admin.com",
+        username: "Admin",
+        avatar: "https://cdn.quasar.dev/img/boy-avatar.png",
+      };
+      user.value = userData;
+      localStorage.setItem("user", JSON.stringify(userData));
+      return Promise.resolve(userData);
     }
 
-    // Crear nuevo usuario
-    const newUser = {
-      id: users.value.length + 1,
-      nombres,
-      apellidos,
-      email,
-      password, // En una app real, esto debería estar hasheado
-      createdAt: new Date().toISOString(),
-    };
-
-    users.value.push(newUser);
-    localStorage.setItem("users", JSON.stringify(users.value));
-    return Promise.resolve(newUser);
-  }
-
-  function login(email, password) {
-    const foundUser = users.value.find(
+    // Verificar usuarios registrados
+    const users = JSON.parse(localStorage.getItem("users") || "[]");
+    const foundUser = users.find(
       (u) => u.email === email && u.password === password
     );
 
@@ -39,21 +32,8 @@ export const useAuthStore = defineStore("auth", () => {
       const userData = {
         id: foundUser.id,
         email: foundUser.email,
-        nombres: foundUser.nombres,
-        apellidos: foundUser.apellidos,
-      };
-      user.value = userData;
-      localStorage.setItem("user", JSON.stringify(userData));
-      return Promise.resolve(userData);
-    }
-
-    // Mantener usuario de prueba (opcional, puedes removerlo en producción)
-    if (email === "admin@admin.com" && password === "admin") {
-      const userData = {
-        id: 0,
-        email: "admin@admin.com",
-        nombres: "Admin",
-        apellidos: "Usuario",
+        username: foundUser.nombres,
+        avatar: foundUser.avatar || "https://cdn.quasar.dev/img/boy-avatar.png",
       };
       user.value = userData;
       localStorage.setItem("user", JSON.stringify(userData));
@@ -61,53 +41,51 @@ export const useAuthStore = defineStore("auth", () => {
     }
 
     return Promise.reject(new Error("Credenciales incorrectas"));
-  }
+  };
 
-  function logout() {
+  const register = async ({ nombres, apellidos, email, password }) => {
+    const users = JSON.parse(localStorage.getItem("users") || "[]");
+
+    if (users.find((u) => u.email === email)) {
+      return Promise.reject(
+        new Error("Este correo electrónico ya está registrado")
+      );
+    }
+
+    const newUser = {
+      id: users.length + 1,
+      nombres,
+      apellidos,
+      email,
+      password,
+      createdAt: new Date().toISOString(),
+      avatar: "https://cdn.quasar.dev/img/boy-avatar.png",
+    };
+
+    users.push(newUser);
+    localStorage.setItem("users", JSON.stringify(users));
+
+    return Promise.resolve(newUser);
+  };
+
+  // src/stores/auth.js - actualizar la función logout
+  const logout = () => {
     user.value = null;
     localStorage.removeItem("user");
-  }
+    localStorage.removeItem("rememberedEmail"); // También limpiar el email recordado
+  };
 
-  function getUserProfile() {
-    return user.value;
-  }
-
-  function updateUserProfile(userData) {
-    if (!user.value)
-      return Promise.reject(new Error("No hay usuario logueado"));
-
-    const userIndex = users.value.findIndex((u) => u.id === user.value.id);
-    if (userIndex === -1)
-      return Promise.reject(new Error("Usuario no encontrado"));
-
-    // Actualizar datos
-    const updatedUser = {
-      ...users.value[userIndex],
-      ...userData,
-      password: users.value[userIndex].password, // Mantener la contraseña original
-    };
-
-    users.value[userIndex] = updatedUser;
-    localStorage.setItem("users", JSON.stringify(users.value));
-
-    // Actualizar usuario actual
-    user.value = {
-      id: updatedUser.id,
-      email: updatedUser.email,
-      nombres: updatedUser.nombres,
-      apellidos: updatedUser.apellidos,
-    };
-    localStorage.setItem("user", JSON.stringify(user.value));
-
-    return Promise.resolve(user.value);
+  // Inicialización - Recuperar sesión si existe
+  const storedUser = localStorage.getItem("user");
+  if (storedUser) {
+    user.value = JSON.parse(storedUser);
   }
 
   return {
     user,
+    isAuthenticated,
     login,
-    logout,
     register,
-    getUserProfile,
-    updateUserProfile,
+    logout,
   };
 });
